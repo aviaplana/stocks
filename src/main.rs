@@ -1,20 +1,22 @@
-mod stocks;
-mod persistance;
+mod repository;
+mod stocks_api;
 
-use stocks::*;
-use persistance::*;
+use repository::{
+    StockRepository
+};
+use stocks_api::StockApi;
 use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let persistance = StockRepository::new();
+    let persistance = StockRepository::new().unwrap();
 
     println!("Stored: ");
-    for entry in persistance.get_entries() {
+    /*for entry in persistance.get_entries() {
         println!("{:?}", entry);
     }
-
-    let stocks_repo = StockRepo::new();
+*/
+    let stocks_repo = StockApi::new();
     stocks_repo.get_stock_price("T").await.unwrap();
     Ok(())
 }

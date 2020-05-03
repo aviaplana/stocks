@@ -18,14 +18,14 @@ pub struct StockPrice {
     price: f32,
 }
 
-pub struct StockRepo { 
+pub struct StockApi { 
     client: Client<HttpsConnector<HttpConnector>, Body>,
 }
 
-impl StockRepo {
-    pub fn new() -> StockRepo {
+impl StockApi {
+    pub fn new() -> StockApi {
         let https = HttpsConnector::new();
-        StockRepo {
+        StockApi {
             client: Client::builder().build::<_, hyper::Body>(https)
         }
     }
