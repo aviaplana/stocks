@@ -17,7 +17,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 */
     let stocks_repo = StockApi::new();
-    stocks_repo.get_stock_price("T").await.unwrap();
+    let list_stocks = stocks_repo.get_stock_list().await.unwrap();
+    for stock in list_stocks {
+        println!("{}({}): {}", stock.name, stock.symbol, stock.price);
+    }
     Ok(())
 }
 
