@@ -15,9 +15,10 @@ impl From<&rusqlite::Row<'_>> for Stock {
     fn from(row: &rusqlite::Row) -> Self {
         Stock {
             symbol: row.get_unwrap(0),
-            price: row.get_unwrap::<_, f64>(1) as f32,
-            initial_price: row.get_unwrap::<_, f64>(2) as f32,
-            market: row.get_unwrap(3),
+            name: row.get_unwrap(1),
+            price: row.get_unwrap::<_, f64>(2) as f32,
+            initial_price: row.get_unwrap::<_, f64>(3) as f32,
+            market: row.get_unwrap(4),
         }
     }
 }
@@ -31,6 +32,7 @@ impl StockSqlite {
         db.execute(
             r"CREATE TABLE IF NOT EXISTS stock (
                 symbol VARCHAR(4) PRIMARY KEY,
+                name VARCHAR(255),
                 price REAL,
                 initial_price REAL,
                 market_id INTEGER REFERENCES market(id)
@@ -43,7 +45,7 @@ impl StockSqlite {
 
     pub fn get_by_makret(&self, market_id: u16) -> Result<Vec<Stock>, PersistanceError> {
         let mut query = self.db.prepare(r"
-            SELECT symbol, price, initial_price, market_id
+            SELECT symbol, name, price, initial_price, market_id
                 FROM stock
                 WHERE s.market_id = ?1").unwrap();
         
@@ -65,10 +67,11 @@ impl Crud for StockSqlite {
     fn add(&self, stock: &Self::Item) -> Result<(), PersistanceError> {
         let result = self.db.execute(
             r"INSERT INTO 
-                stock (symbol, price, initial_price, market_id) 
+                stock (symbol, name, price, initial_price, market_id) 
                 values (?1, ?2, ?3, ?4);",
             params![
                 stock.symbol, 
+                stock.name, 
                 stock.price.to_string(), 
                 stock.initial_price.to_string(), 
                 &stock.market.to_string()]);
@@ -94,9 +97,10 @@ impl Crud for StockSqlite {
     fn update(&self, stock: &Self::Item) -> Result<(), PersistanceError> {
         let result = self.db.execute(r"
             UPDATE stock 
-                SET price = ?1, initial_price = ?2, market_id = ?3
-                WHERE symbol = ?4",
+                SET name = ?1, price = ?2, initial_price = ?3, market_id = ?4
+                WHERE symbol = ?5",
             params![
+                stock.name,
                 stock.price.to_string(), 
                 stock.initial_price.to_string(), 
                 stock.market.to_string(), 
@@ -111,7 +115,7 @@ impl Crud for StockSqlite {
 
     fn get(&self, id: Self::IdType) -> Result<Option<Self::Item>, PersistanceError> {
         let result = self.db.query_row(
-            "SELECT symbol, price, initial_price, market_id FROM stock WHERE symbol = ?1", 
+            "SELECT symbol, name, price, initial_price, market_id FROM stock WHERE symbol = ?1", 
             params![id], 
             |row| Ok(Some(Stock::from(row))));
         // TODO: Check if none is returned if id not found
@@ -120,7 +124,7 @@ impl Crud for StockSqlite {
 
     fn get_all(&self) -> Result<Vec<Self::Item>, PersistanceError> {
         let mut query = self.db.prepare(r"
-        SELECT symbol, price, initial_price, market_id
+        SELECT symbol, name, price, initial_price, market_id
             FROM stock").unwrap();
     
         let items = query.query_map(

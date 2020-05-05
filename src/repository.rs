@@ -6,6 +6,9 @@ use std::rc::Rc;
 use error::PersistanceError;
 use stock::{
     Stock,
+    stock_api::{
+        StockApi
+    },
     stock_sqlite::StockSqlite
 };
 use market::{
@@ -26,23 +29,26 @@ trait Crud {
 }
 
 pub struct StockRepository {
-    stock_ds: StockSqlite,
-    market_ds: MarketSqlite,
+    stock_db: StockSqlite,
+    stock_api: StockApi,
+    market_db: MarketSqlite,
 }
 
 impl StockRepository {
     pub fn new() -> Result<StockRepository, PersistanceError> {
+        let stock_api = StockApi::new();
         match Connection::open("stocks.db") {
             Ok(db_conn) => {
                 let db = Rc::new(db_conn);
                 
-                let stock_ds = StockSqlite::new(db.clone());
-                let market_ds = MarketSqlite::new(db.clone());
+                let stock_db = StockSqlite::new(db.clone());
+                let market_db = MarketSqlite::new(db.clone());
 
                 Ok(
                     StockRepository {
-                        stock_ds,
-                        market_ds,
+                        stock_db,
+                        stock_api,
+                        market_db,
                     }
                 )
             },
@@ -50,48 +56,43 @@ impl StockRepository {
         }
     }
 
-    pub fn add_stock(&self, stock: &Stock) -> Result<(), PersistanceError> {
-        self.stock_ds.add(stock)
+    // Stores a stock in the local storage
+    pub fn store_stock(&self, stock: &Stock) -> Result<(), PersistanceError> {
+        self.stock_db.add(stock)
     }
 
-    pub fn add_market(&self, market: &Market) -> Result<(), PersistanceError> {
-        self.market_ds.add(market)
-    }
-
-    pub fn update_stock(&self, stock: &Stock) -> Result<(), PersistanceError> {
-        self.stock_ds.update(stock)
-    }
-
-    pub fn update_market(&self, market: &Market) -> Result<(), PersistanceError> {
-        self.market_ds.update(market)
-    }
-
+    // Deletes a stock from the local storage
     pub fn delete_stock(&self, symbol: &str) -> Result<(), PersistanceError> {
-        self.stock_ds.delete(symbol.to_owned())
+        self.stock_db.delete(symbol.to_owned())
     }
 
-    pub fn delete_makret(&self, id: u16) -> Result<(), PersistanceError> {
-        if self.stock_ds.get_by_makret(id)?.is_empty() {
-            self.market_ds.delete(id)
-        } else {
-            Err(PersistanceError::EntryHasDependencies)
+    // Returns a vector with all the stored stocks
+    pub fn get_stored_stocks(&self)  -> Result<Vec<Stock>, PersistanceError> {
+        unimplemented!();
+    }
+
+    // Updates the price of the stored stocks, and returns them in a vector
+    pub fn update_stocks(&self) ->Result<Vec<Stock>, PersistanceError> {
+        unimplemented!();
+    }
+
+    // Returns a list of all the available stocks in the API
+    pub async fn get_available_stocks(&self) -> Result<Vec<Stock>, Box<dyn std::error::Error+Sync+Send>>{
+        match self.stock_api.get_stock_list().await {
+            Ok(stocks) => {
+                Ok(stocks
+                    .iter()
+                    .map(Stock::from)
+                    .collect::<Vec<Stock>>())
+            },
+            Err(e) => Err(e)
         }
     }
-/*
-    pub fn get_entries(&self) -> Vec<Stock> {
-        let mut stmt = self.db.prepare(
-            "SELECT s.* FROM stock s;",).unwrap();
-        
-        stmt.query_map(NO_PARAMS, |row| {
-            Ok(Stock {
-                symbol: row.get(0).unwrap(),
-                price: row.get::<_, f64>(1).unwrap() as f32,
-                initial_price: row.get::<_, f64>(2).unwrap() as f32,
-                market: row.get(3).unwrap(),
-            })
-        }).unwrap().map(|x| x.unwrap()).collect::<Vec<Stock>>()
-    }*/
-}
+
+    // Returns a list of all the markets available in the API
+    pub fn get_available_markets() -> Result<Vec<Market>, PersistanceError> {
+        unimplemented!();
+    }
 
 
 /*
