@@ -58,6 +58,19 @@ impl StockSqlite {
 
         Ok(items)
     }
+
+    pub fn update_price(&self, symbol: &str, price: f32) -> Result<(), PersistanceError> {
+        let result = self.db.execute(r"
+            UPDATE stock
+                SET price = ?1
+                WHERE symbol = ?2",
+            params![symbol, price.to_string()]);
+        
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PersistanceError::CouldNotUpdate(e))
+        }
+    }
 }
 
 impl Crud for StockSqlite {
@@ -68,7 +81,7 @@ impl Crud for StockSqlite {
         let result = self.db.execute(
             r"INSERT INTO 
                 stock (symbol, name, price, initial_price, market_id) 
-                values (?1, ?2, ?3, ?4);",
+                values (?1, ?2, ?3, ?4, ?5);",
             params![
                 stock.symbol, 
                 stock.name, 

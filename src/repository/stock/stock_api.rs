@@ -89,7 +89,6 @@ impl StockApi {
                 match to_bytes(resp.body_mut()).await {
                     Ok(body) => {
                         let stock_price: StockPriceResponse = serde_json::from_slice(&body).unwrap();
-                        println!("{:?}", stock_price);
                         Ok(stock_price)
                     },
                     Err(e) => Err(e.into())

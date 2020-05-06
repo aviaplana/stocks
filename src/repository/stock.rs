@@ -5,17 +5,11 @@ use stock_api::StockListElement;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Stock {
-    symbol: String,
-    name: String,
-    price: f32,
-    initial_price: f32,
-    market: u16 // Usar id o posar struct Market?
-}
-
-impl Stock {
-    pub fn set_price(&mut self, price: f32) {
-        self.price = price;
-    }
+    pub symbol: String,
+    pub name: String,
+    pub price: f32,
+    pub initial_price: f32,
+    pub market: u16 // Usar id o posar struct Market?
 }
 
 impl From<&StockListElement> for Stock {
