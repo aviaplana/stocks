@@ -2,20 +2,15 @@ pub mod market;
 pub mod stock;
 pub mod error;
 
+use hyper_tls::HttpsConnector;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use error::PersistanceError;
-use stock::{
-    Stock,
-    stock_api::{
-        StockApi
-    },
-};
-use market::{
-    Market
-};
+use stock::Stock;
+use market::Market;
 
-type DbConn = PooledConnection<SqliteConnectionManager>;
+pub type DbConn = PooledConnection<SqliteConnectionManager>;
+pub type HttpClient = hyper::Client<HttpsConnector<hyper::client::HttpConnector>, hyper::Body>;
 
 // This trait makes no sense.
 trait Crud {
@@ -50,16 +45,16 @@ pub fn update_price(db_conn: &DbConn, symbol: &str, price: f32) -> Result<(), Pe
 }
 
 // Get the current price of a stock
-/*pub async fn get_current_price(&self, symbol: &str) ->Result<f32, Box<dyn std::error::Error+Sync+Send>> {
-    match self.stock_api.get_stock_price(symbol).await {
+pub async fn get_current_price(client: &HttpClient, symbol: &str) ->Result<f32, Box<dyn std::error::Error+Sync+Send>> {
+    match stock::stock_api::get_stock_price(client, symbol).await {
         Ok(stock_price) => Ok(stock_price.price),
         Err(e) => Err(e)
     }
-}*/
+}
 
 // Returns a list of all the available stocks in the API
-/*pub async fn get_available_stocks(&self) -> Result<Vec<Stock>, Box<dyn std::error::Error+Sync+Send>>{
-    match self.stock_api.get_stock_list().await {
+pub async fn get_available_stocks(client: &HttpClient, ) -> Result<Vec<Stock>, Box<dyn std::error::Error+Sync+Send>>{
+    match stock::stock_api::get_stock_list(client).await {
         Ok(stocks) => {
             Ok(stocks
                 .iter()
@@ -68,7 +63,7 @@ pub fn update_price(db_conn: &DbConn, symbol: &str, price: f32) -> Result<(), Pe
         },
         Err(e) => Err(e)
     }
-}*/
+}
 
 // Returns a list of all the markets available in the API
 pub fn get_available_markets() -> Result<Vec<Market>, PersistanceError> {

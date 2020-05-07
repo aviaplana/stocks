@@ -3,14 +3,10 @@ use crate::repository::{
 };
 use super::Stock;
 
-use r2d2::PooledConnection;
-use r2d2_sqlite::{
-    SqliteConnectionManager,
-    rusqlite::{ 
-        params,
-        NO_PARAMS,
-        Row,
-    },
+use r2d2_sqlite::rusqlite::{ 
+    params,
+    NO_PARAMS,
+    Row,
 };
 use crate::repository::DbConn;
 

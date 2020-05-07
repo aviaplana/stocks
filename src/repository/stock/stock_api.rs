@@ -1,14 +1,11 @@
 extern crate hyper;
 use hyper::{
-    Client, 
-    Body,
     body::to_bytes,
     Uri,
-    client::HttpConnector,
 };
-use hyper_tls::HttpsConnector;
 use serde_json;
 use serde::Deserialize;
+use crate::repository::HttpClient;
 
 enum Endpoint {
     RealTimePrice(String),
@@ -50,51 +47,38 @@ pub struct StocksListResponse {
     stocks: Vec<StockListElement>,
 }
 
-pub struct StockApi { 
-    client: Client<HttpsConnector<HttpConnector>, Body>,
+pub async fn get_stock_list(client: &HttpClient) -> Result<Vec<StockListElement>, Box<dyn std::error::Error + Send + Sync>> {        
+    let uri = Endpoint::StockList.to_uri();
+    match client.get(uri).await {
+        Ok(mut resp) => {
+            match to_bytes(resp.body_mut()).await {
+                Ok(body) => {
+                    let stock_price: StocksListResponse = serde_json::from_slice(&body).unwrap();
+                    //println!("{:?}", stock_price);
+                    Ok(stock_price.stocks)
+                },
+                Err(e) => Err(e.into())
+            }
+        },
+        Err(e) => Err(e.into()),
+    }
 }
 
-impl StockApi {
-    pub fn new() -> StockApi {
-        let https = HttpsConnector::new();
-        StockApi {
-            client: Client::builder().build::<_, hyper::Body>(https)
-        }
-    }
+pub async fn get_stock_price(client: &HttpClient, symbol: &str) -> Result<StockPriceResponse, Box<dyn std::error::Error + Send + Sync>> {        
+    let uri = Endpoint::RealTimePrice(symbol.into()).to_uri();
+    let response = client.get(uri).await;
 
-    pub async fn get_stock_list(&self) -> Result<Vec<StockListElement>, Box<dyn std::error::Error + Send + Sync>> {        
-        let uri = Endpoint::StockList.to_uri();
-        let response = self.client.get(uri).await;
-        match response {
-            Ok(mut resp) => {
-                match to_bytes(resp.body_mut()).await {
-                    Ok(body) => {
-                        let stock_price: StocksListResponse = serde_json::from_slice(&body).unwrap();
-                        //println!("{:?}", stock_price);
-                        Ok(stock_price.stocks)
-                    },
-                    Err(e) => Err(e.into())
-                }
-            },
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    pub async fn get_stock_price(&self, symbol: &str) -> Result<StockPriceResponse, Box<dyn std::error::Error + Send + Sync>> {        
-        let uri = Endpoint::RealTimePrice(symbol.into()).to_uri();
-        let response = self.client.get(uri).await;
-
-        match response {
-            Ok(mut resp) => {
-                match to_bytes(resp.body_mut()).await {
-                    Ok(body) => {
-                        let stock_price: StockPriceResponse = serde_json::from_slice(&body).unwrap();
-                        Ok(stock_price)
-                    },
-                    Err(e) => Err(e.into())
-                }
-            },
-            Err(e) => Err(e.into()),
-        }
+    match response {
+        Ok(mut resp) => {
+            match to_bytes(resp.body_mut()).await {
+                Ok(body) => {
+                    let stock_price: StockPriceResponse = serde_json::from_slice(&body).unwrap();
+                    println!("{:?}", stock_price);
+                    Ok(stock_price)
+                },
+                Err(e) => Err(e.into())
+            }
+        },
+        Err(e) => Err(e.into()),
     }
 }
