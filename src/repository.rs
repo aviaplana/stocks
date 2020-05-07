@@ -2,20 +2,20 @@ pub mod market;
 pub mod stock;
 pub mod error;
 
-use std::rc::Rc;
+use r2d2::PooledConnection;
+use r2d2_sqlite::SqliteConnectionManager;
 use error::PersistanceError;
 use stock::{
     Stock,
     stock_api::{
         StockApi
     },
-    stock_sqlite::StockSqlite
 };
 use market::{
-    Market,
-    market_sqlite::MarketSqlite
+    Market
 };
-use rusqlite::Connection;
+
+type DbConn = PooledConnection<SqliteConnectionManager>;
 
 // This trait makes no sense.
 trait Crud {
@@ -29,80 +29,52 @@ trait Crud {
     fn get_all(&self) -> Result<Vec<Self::Item>, PersistanceError>;
 }
 
-pub struct StockRepository {
-    stock_db: StockSqlite,
-    stock_api: StockApi,
-    market_db: MarketSqlite,
+// Stores a stock in the local storage
+pub fn store_stock(db_conn: &DbConn, stock: &Stock) -> Result<(), PersistanceError> {
+    stock::stock_db::add(db_conn, stock)
 }
 
-impl StockRepository {
-    pub fn new() -> Result<StockRepository, PersistanceError> {
-        let stock_api = StockApi::new();
-        match Connection::open("stocks.db") {
-            Ok(db_conn) => {
-                let db = Rc::new(db_conn);
-                
-                let stock_db = StockSqlite::new(db.clone());
-                let market_db = MarketSqlite::new(db.clone());
-
-                Ok(
-                    StockRepository {
-                        stock_db,
-                        stock_api,
-                        market_db,
-                    }
-                )
-            },
-            Err(e) => Err(PersistanceError::InitializationError(e)) // TODO: Check if error is correct
-        }
-    }
-
-    // Stores a stock in the local storage
-    pub fn store_stock(&self, stock: &Stock) -> Result<(), PersistanceError> {
-        self.stock_db.add(stock)
-    }
-
-    // Deletes a stock from the local storage
-    pub fn delete_stock(&self, symbol: &str) -> Result<(), PersistanceError> {
-        self.stock_db.delete(symbol.to_owned())
-    }
-
-    // Returns a vector with all the stored stocks
-    pub fn get_stored_stocks(&self)  -> Result<Vec<Stock>, PersistanceError> {
-        self.stock_db.get_all()
-    }
-
-    // Updates the price of a stored stock.
-    pub fn update_price(&self, symbol: &str, price: f32) -> Result<(), PersistanceError> {
-        self.stock_db.update_price(symbol, price)
-    }
-
-    // Get the current price of a stock
-    pub async fn get_current_price(&self, symbol: &str) ->Result<f32, Box<dyn std::error::Error+Sync+Send>> {
-        match self.stock_api.get_stock_price(symbol).await {
-            Ok(stock_price) => Ok(stock_price.price),
-            Err(e) => Err(e)
-        }
-    }
-
-    // Returns a list of all the available stocks in the API
-    pub async fn get_available_stocks(&self) -> Result<Vec<Stock>, Box<dyn std::error::Error+Sync+Send>>{
-        match self.stock_api.get_stock_list().await {
-            Ok(stocks) => {
-                Ok(stocks
-                    .iter()
-                    .map(Stock::from)
-                    .collect::<Vec<Stock>>())
-            },
-            Err(e) => Err(e)
-        }
-    }
-
-    // Returns a list of all the markets available in the API
-    pub fn get_available_markets() -> Result<Vec<Market>, PersistanceError> {
-        unimplemented!();
-    }
+// Deletes a stock from the local storage
+pub fn delete_stock(db_conn: &DbConn, symbol: &str) -> Result<(), PersistanceError> {
+    stock::stock_db::delete(db_conn, symbol)
 }
+
+// Returns a vector with all the stored stocks
+pub fn get_stored_stocks(db_conn: &DbConn)  -> Result<Vec<Stock>, PersistanceError> {
+    stock::stock_db::get_all(db_conn)
+}
+
+// Updates the price of a stored stock.
+pub fn update_price(db_conn: &DbConn, symbol: &str, price: f32) -> Result<(), PersistanceError> {
+    stock::stock_db::update_price(db_conn, symbol, price)
+}
+
+// Get the current price of a stock
+/*pub async fn get_current_price(&self, symbol: &str) ->Result<f32, Box<dyn std::error::Error+Sync+Send>> {
+    match self.stock_api.get_stock_price(symbol).await {
+        Ok(stock_price) => Ok(stock_price.price),
+        Err(e) => Err(e)
+    }
+}*/
+
+// Returns a list of all the available stocks in the API
+/*pub async fn get_available_stocks(&self) -> Result<Vec<Stock>, Box<dyn std::error::Error+Sync+Send>>{
+    match self.stock_api.get_stock_list().await {
+        Ok(stocks) => {
+            Ok(stocks
+                .iter()
+                .map(Stock::from)
+                .collect::<Vec<Stock>>())
+        },
+        Err(e) => Err(e)
+    }
+}*/
+
+// Returns a list of all the markets available in the API
+pub fn get_available_markets() -> Result<Vec<Market>, PersistanceError> {
+    unimplemented!();
+}
+
 
 /*
 #[test]

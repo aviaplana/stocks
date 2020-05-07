@@ -2,6 +2,7 @@ use std::{
     error::Error,
     fmt,
 };
+use r2d2_sqlite::rusqlite;
 
 #[derive(Debug)]
 pub enum PersistanceError {

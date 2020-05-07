@@ -1,4 +1,4 @@
-pub mod stock_sqlite;
+pub mod stock_db;
 pub mod stock_api;
 
 use stock_api::StockListElement;

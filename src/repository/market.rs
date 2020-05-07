@@ -1,4 +1,4 @@
-pub mod market_sqlite;
+pub mod market_db;
 
 pub struct Market {
     id: u16,
