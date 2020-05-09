@@ -1,6 +1,7 @@
 mod repository;
 mod server;
 
+use log::{debug, info};
 use crossbeam_channel::Sender;
 use bus::Bus;
 use serde::{Serialize, Deserialize};
@@ -97,20 +98,21 @@ fn get_hyper_connection() -> HttpClient{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    env_logger::init();
     let db_pool = get_db_pool_connection();
     let rx_ch = server::launch_tcp_server();
 
     loop {
-        println!("Waiting for messages...");
+        info!(target: "Main", "Waiting for messages...");
         
         let (received_str, tx_ch) = rx_ch.recv().unwrap();
-        println!("[MAIN] Reived raw: {:?}", &received_str);
+        debug!(target: "Main", "Reived raw: {:?}", &received_str);
 
         let job = Job::from(&received_str);
-        println!("[MAIN] Deserialized{:?}", job);
+        debug!(target: "Main", "Deserialized{:?}", job);
 
         let operation = Operation::from(&job.payload);
-        println!("[MAIN] Got operation {} from connection {}", operation.to_string(), job.id);
+        info!(target: "Main", "Got operation {} from connection {}", operation.to_string(), job.id);
 
         let pool = db_pool.clone();
 
@@ -149,7 +151,8 @@ fn process_help(tx: Sender<Vec<u8>>, id: u32) {
         id,
         payload: response.into()
     };
-    println!("[MAIN] Sending {:?}", job_response);
+    
+    info!(target: "Main", "Sending {:?}", job_response);
 
     let bytes = job_response.to_bytes();
     tx.send(bytes);

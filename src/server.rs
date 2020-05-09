@@ -3,6 +3,7 @@ use std::{
     io::{Read, Write},
     str,
 };
+use log::{debug, info, error};
 use crossbeam_channel::{
     unbounded,
     bounded,
@@ -34,7 +35,7 @@ fn listen_socket(listener: TcpListener, tx: Sender<(Vec<u8>, Sender<Vec<u8>>)>) 
                     process_connection(connection_id, stream, tx_task);
                     connection_id = connection_id + 1;
                 },
-                Err(e) => eprintln!("Failed: {}", e)
+                Err(e) => error!(target: "Server", "Failed: {}", e)
             }
         }
     });
@@ -42,7 +43,7 @@ fn listen_socket(listener: TcpListener, tx: Sender<(Vec<u8>, Sender<Vec<u8>>)>) 
 
 fn process_connection(connection_id: u32, mut stream: TcpStream, tx: Sender<(Vec<u8>, Sender<Vec<u8>>)>) {
     tokio::task::spawn_blocking(move || {
-        println!("[SERVER] New job from connection id {}", connection_id);
+        info!(target: "Server", "New connection with id {}", connection_id);
         let mut buf = [0; 512];
         let mut bytes_read = 0;
 
@@ -53,7 +54,7 @@ fn process_connection(connection_id: u32, mut stream: TcpStream, tx: Sender<(Vec
             let message = str::from_utf8(&buf[..bytes_read])
                 .unwrap()
                 .trim_end_matches('\n'); //Removes tailing new line;
-            println!("[SERVER] Received message: {}", message);
+            debug!(target: "Server", "Received message: {}", message);
 
             let operation = Operation::from(message.to_string());
 
@@ -61,11 +62,11 @@ fn process_connection(connection_id: u32, mut stream: TcpStream, tx: Sender<(Vec
                 let rx = send_job(connection_id, &operation, &tx);
                 wait_and_process_response(connection_id, &rx, &stream);
             } else {
-                eprintln!("[SERVER] Operation not valid.")
+                error!(target: "Server", "Operation not valid.")
             }
         }
         
-        println!("[SERVER] Connection {} closed", connection_id);
+        info!(target: "Server", "Connection {} closed", connection_id);
     });
 
 }
@@ -79,7 +80,7 @@ fn send_job(connection_id: u32,
         id: connection_id, 
         payload: serialized_op
     };
-    println!("[SERVER] Sending job {:?}", job);
+    info!(target: "Server", "Sending job {:?}", job);
     let (tx2, rx2) = bounded(1);
     tx.send((job.to_bytes(), tx2)).unwrap();
     rx2
@@ -88,13 +89,13 @@ fn send_job(connection_id: u32,
 fn wait_and_process_response(connection_id: u32, rx: &Receiver<Vec<u8>>, mut stream: &TcpStream) {
     loop {
         let response = rx.recv().unwrap();
-        println!("[SERVER] Raw response: {:?}", response);
+        debug!(target: "Server", "Raw response: {:?}", response);
 
         let resp_job= Job::from(&response);
         if resp_job.id == connection_id {
             let payload_arr = resp_job.payload.as_slice();
             let to_str = str::from_utf8(payload_arr).unwrap();
-            println!("[SERVER] Deserialized: {}", to_str);
+            info!(target: "Server", "Response: {}", to_str);
             stream.write(payload_arr).unwrap();
             break;
         } 
