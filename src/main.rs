@@ -118,8 +118,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         tokio::task::spawn(async move {
             match operation {
-                Operation::ListStored => process_list_stored(&pool),
-                Operation::ListAvailable => process_list_available().await,
+                Operation::ListStored => process_list_stored(tx_ch, job.id, &pool),
+                Operation::ListAvailable => process_list_available(tx_ch, job.id).await,
                 Operation::Help => process_help(tx_ch, job.id),
                 _ => {}
             }
@@ -129,14 +129,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
-async fn process_list_available() {
+async fn process_list_available(tx: Sender<Vec<u8>>, id: u32) {
     let http_client = get_hyper_connection();
-    for stock in repository::get_available_stocks(&http_client).await {
-        println!("{:?}", stock);
-    };
+    let list_available = repository::get_available_stocks(&http_client).await.unwrap();
+    let list_json = serde_json::to_string(&list_available).unwrap();
+    send_response(&tx, id, list_json.to_bytes());
+
 }
 
-fn process_list_stored(pool: &r2d2::Pool<SqliteConnectionManager>) {
+fn process_list_stored(tx: Sender<Vec<u8>>, id: u32, pool: &r2d2::Pool<SqliteConnectionManager>) {
     let connection = pool.get().unwrap();
     repository::get_stored_stocks(&connection);
 }
@@ -147,16 +148,19 @@ fn process_help(tx: Sender<Vec<u8>>, id: u32) {
         Operation::ListStored.to_string(),
         Operation::Help.to_string());
 
+    send_response(&tx, id, response.into());
+}
+
+fn send_response(tx: &Sender<Vec<u8>>, id: u32, payload: Vec<u8>) {
     let job_response = Job {
         id,
-        payload: response.into()
+        payload
     };
     
-    info!(target: "Main", "Sending {:?}", job_response);
+    info!(target: "Main", "Sending to connection {}: {:?}", id, job_response);
 
     let bytes = job_response.to_bytes();
-    tx.send(bytes);
-    // TODO: Send response to the connection
+    tx.send(bytes).unwrap();
 }
 
 #[test]

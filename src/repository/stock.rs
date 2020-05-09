@@ -2,8 +2,9 @@ pub mod stock_db;
 pub mod stock_api;
 
 use stock_api::StockListElement;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Stock {
     pub symbol: String,
     pub name: String,
