@@ -12,20 +12,8 @@ use market::Market;
 pub type DbConn = PooledConnection<SqliteConnectionManager>;
 pub type HttpClient = hyper::Client<HttpsConnector<hyper::client::HttpConnector>, hyper::Body>;
 
-// This trait makes no sense.
-trait Crud {
-    type Item;
-    type IdType;
-
-    fn add(&self, item: &Self::Item) -> Result<(), PersistanceError>;
-    fn delete(&self, id: Self::IdType) -> Result<(), PersistanceError>;
-    fn update(&self, id: &Self::Item) -> Result<(), PersistanceError>;
-    fn get(&self, id: Self::IdType) -> Result<Option<Self::Item>, PersistanceError>;
-    fn get_all(&self) -> Result<Vec<Self::Item>, PersistanceError>;
-}
-
 // Stores a stock in the local storage
-pub fn store_stock(db_conn: &DbConn, stock: &Stock) -> Result<(), PersistanceError> {
+pub fn add_stock(db_conn: &DbConn, stock: &Stock) -> Result<(), PersistanceError> {
     stock::stock_db::add(db_conn, stock)
 }
 

@@ -1,6 +1,7 @@
 pub mod stock_db;
 pub mod stock_api;
 
+use log::debug;
 use stock_api::StockListElement;
 use serde::{Serialize, Deserialize};
 
@@ -11,6 +12,13 @@ pub struct Stock {
     pub price: f32,
     pub initial_price: f32,
     pub market: u16 // Usar id o posar struct Market?
+}
+
+impl From<&str> for Stock {
+    fn from(json: &str) -> Self {
+        debug!(target: "stock", "Deserializing {}", json);
+        serde_json::from_slice(json.as_bytes()).unwrap()
+    }
 }
 
 impl From<&StockListElement> for Stock {

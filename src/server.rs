@@ -12,6 +12,15 @@ use crossbeam_channel::{
 };
 use crate::{Job, Operation, ToBytes};
 use tokio;
+use serde::Serialize;
+
+
+#[derive(Debug, Serialize)]
+pub struct ResponseWrapper<'a> {
+    pub response: &'a str
+}
+
+
 
 pub fn launch_tcp_server() ->  Receiver<(Vec<u8>, Sender<Vec<u8>>)> {
     let listener = TcpListener::bind("0.0.0.0:8888")

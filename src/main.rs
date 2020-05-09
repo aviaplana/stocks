@@ -3,17 +3,17 @@ mod server;
 
 use log::{debug, info};
 use crossbeam_channel::Sender;
-use bus::Bus;
 use serde::{Serialize, Deserialize};
 use hyper_tls::HttpsConnector;
 use tokio;
+use server::ResponseWrapper;
 use repository::{
+    stock::Stock,
     HttpClient
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use r2d2;
 
-const MAX_CLIENTS: usize = 100;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Operation {
@@ -21,6 +21,7 @@ pub enum Operation {
     ListAvailable,
     UpdatePrices,
     DeleteStock(String),
+    AddStock(Stock),
     Help,
     Error
 }
@@ -43,7 +44,8 @@ impl ToString for Operation {
             ListStored => "list_stored".into(),
             ListAvailable => "list_available".into(),
             UpdatePrices => "update_prices".into(),
-            Delete => "delete_stock".into(),
+            AddStock => "add_stock".into(),
+            DeleteStock => "delete_stock".into(),
             Help => "help".into(),
             Error => "error".into(),
         }
@@ -63,9 +65,15 @@ impl From<String> for Operation {
             "list_available" => Self::ListAvailable,
             "update_prices" => Self::UpdatePrices,
             op if op.starts_with("delete_stock") => {
-                let parts = op.split(' ').collect::<Vec<&str>>();
+                let parts = op.split_whitespace().collect::<Vec<&str>>();
                 let stock = parts.get(1).unwrap();
                 Self::DeleteStock(String::from(*stock))
+            },
+            op if op.starts_with("add_stock") => {
+                let parts = op.split_whitespace().collect::<Vec<&str>>();
+                let stock_str = parts[1..].join(" ");
+                let stock = Stock::from(stock_str.as_str());
+                Self::AddStock(stock)
             },
             "help" | "?" => Self::Help,
             _ => Self::Error
@@ -120,6 +128,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             match operation {
                 Operation::ListStored => process_list_stored(tx_ch, job.id, &pool),
                 Operation::ListAvailable => process_list_available(tx_ch, job.id).await,
+                Operation::AddStock(stock) => process_add_stock(tx_ch, job.id, &stock, &pool),
+                Operation::DeleteStock(symbol) => process_delete_stock(tx_ch, job.id, &symbol, &pool),
                 Operation::Help => process_help(tx_ch, job.id),
                 _ => {}
             }
@@ -133,13 +143,35 @@ async fn process_list_available(tx: Sender<Vec<u8>>, id: u32) {
     let http_client = get_hyper_connection();
     let list_available = repository::get_available_stocks(&http_client).await.unwrap();
     let list_json = serde_json::to_string(&list_available).unwrap();
-    send_response(&tx, id, list_json.to_bytes());
 
+
+    send_response(&tx, id, &list_json);
+}
+
+fn process_add_stock(tx: Sender<Vec<u8>>, id: u32, stock: &Stock, pool: &r2d2::Pool<SqliteConnectionManager>) {
+    let connection = pool.get().unwrap();
+    let response = repository::add_stock(&connection, stock)
+        .map(|_| { "true"})
+        .or_else::<&str, _>(|_| { Ok("false") })
+        .unwrap();
+    send_response(&tx, id, response);
+}
+
+fn process_delete_stock(tx: Sender<Vec<u8>>, id: u32, stock: &str, pool: &r2d2::Pool<SqliteConnectionManager>) {
+    let connection = pool.get().unwrap();
+    let response = repository::delete_stock(&connection, stock)
+        .map(|_| { "true" })
+        .or_else::<&str, _>(|_| { Ok("false") })
+        .unwrap();
+    send_response(&tx, id, response.into());
 }
 
 fn process_list_stored(tx: Sender<Vec<u8>>, id: u32, pool: &r2d2::Pool<SqliteConnectionManager>) {
     let connection = pool.get().unwrap();
-    repository::get_stored_stocks(&connection);
+    let response = repository::get_stored_stocks(&connection).unwrap();
+
+    let serialized_response = serde_json::to_string(&response).unwrap();
+    send_response(&tx, id, serialized_response.as_str());
 }
 
 fn process_help(tx: Sender<Vec<u8>>, id: u32) {
@@ -148,13 +180,16 @@ fn process_help(tx: Sender<Vec<u8>>, id: u32) {
         Operation::ListStored.to_string(),
         Operation::Help.to_string());
 
-    send_response(&tx, id, response.into());
+    send_response(&tx, id, response.as_str());
 }
 
-fn send_response(tx: &Sender<Vec<u8>>, id: u32, payload: Vec<u8>) {
+fn send_response(tx: &Sender<Vec<u8>>, id: u32, response: &str) {
+    let response = ResponseWrapper{ response };
+    let response_serialized = serde_json::to_string(&response).unwrap();
+    
     let job_response = Job {
         id,
-        payload
+        payload: response_serialized.to_bytes()
     };
     
     info!(target: "Main", "Sending to connection {}: {:?}", id, job_response);
