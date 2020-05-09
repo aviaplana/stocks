@@ -60,7 +60,7 @@ pub async fn get_stock_list(client: &HttpClient) -> Result<Vec<StockListElement>
                 Err(e) => Err(e.into())
             }
         },
-        Err(e) => Err(e.into()),
+        Err(e) => Err(e.into()), 
     }
 }
 

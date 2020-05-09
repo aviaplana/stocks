@@ -1,6 +1,9 @@
 mod repository;
 mod server;
 
+use crossbeam_channel::Sender;
+use bus::Bus;
+use serde::{Serialize, Deserialize};
 use hyper_tls::HttpsConnector;
 use tokio;
 use repository::{
@@ -9,7 +12,9 @@ use repository::{
 use r2d2_sqlite::SqliteConnectionManager;
 use r2d2;
 
-#[derive(Debug, PartialEq)]
+const MAX_CLIENTS: usize = 100;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Operation {
     ListStored,
     ListAvailable,
@@ -17,6 +22,18 @@ pub enum Operation {
     DeleteStock(String),
     Help,
     Error
+}
+
+pub trait ToBytes  {
+    fn to_bytes(&self) -> Vec<u8>;
+}
+
+impl<T> ToBytes for T where 
+    T: Serialize + Deserialize<'static>{
+    
+        fn to_bytes(&self) -> Vec<u8> {
+        bincode::serialize(&self).unwrap()
+    }
 }
 
 impl ToString for Operation {
@@ -29,6 +46,12 @@ impl ToString for Operation {
             Help => "help".into(),
             Error => "error".into(),
         }
+    }
+}
+
+impl From<&Vec<u8>> for Operation {
+    fn from(vec: &Vec<u8>) -> Operation {
+        bincode::deserialize(vec.as_slice()).unwrap()
     }
 }
 
@@ -49,6 +72,18 @@ impl From<String> for Operation {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct Job {
+    id: u32,
+    payload: Vec<u8>,
+}
+
+impl From<&Vec<u8>> for Job {
+    fn from(vec: &Vec<u8>) -> Job {
+        bincode::deserialize(vec.as_slice()).unwrap()
+    }
+}
+
 fn get_db_pool_connection() -> r2d2::Pool<SqliteConnectionManager> {
     let manager = SqliteConnectionManager::file("stocks.db");
     r2d2::Pool::new(manager).expect("Couldn't create pool.")
@@ -59,41 +94,66 @@ fn get_hyper_connection() -> HttpClient{
     hyper::Client::builder().build::<_, hyper::Body>(https)
 }
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let db_pool = get_db_pool_connection();
     let rx_ch = server::launch_tcp_server();
 
     loop {
-        let mut received_str = rx_ch.recv().unwrap();
-        received_str.pop(); // Pop removes tailing new line.
-        let operation = Operation::from(received_str);
+        println!("Waiting for messages...");
+        
+        let (received_str, tx_ch) = rx_ch.recv().unwrap();
+        println!("[MAIN] Reived raw: {:?}", &received_str);
 
-        println!("Channel got : {:?}", operation);
+        let job = Job::from(&received_str);
+        println!("[MAIN] Deserialized{:?}", job);
+
+        let operation = Operation::from(&job.payload);
+        println!("[MAIN] Got operation {} from connection {}", operation.to_string(), job.id);
+
         let pool = db_pool.clone();
+
         tokio::task::spawn(async move {
             match operation {
-                Operation::ListStored => {
-                    let connection = pool.get().unwrap();
-                    repository::get_stored_stocks(&connection);
-                },
-                Operation::ListAvailable => {
-                    let http_client = get_hyper_connection();
-                    for stock in repository::get_available_stocks(&http_client).await {
-                        println!("{:?}", stock);
-                    };
-                },
-                Operation::Help => {
-                    println!(r"Available commands:{}, {}, {}",
-                        Operation::ListAvailable.to_string(), 
-                        Operation::ListStored.to_string(),
-                        Operation::Help.to_string());
-                }
+                Operation::ListStored => process_list_stored(&pool),
+                Operation::ListAvailable => process_list_available().await,
+                Operation::Help => process_help(tx_ch, job.id),
                 _ => {}
             }
         }).await.unwrap()
     }
+
     Ok(())
+}
+
+async fn process_list_available() {
+    let http_client = get_hyper_connection();
+    for stock in repository::get_available_stocks(&http_client).await {
+        println!("{:?}", stock);
+    };
+}
+
+fn process_list_stored(pool: &r2d2::Pool<SqliteConnectionManager>) {
+    let connection = pool.get().unwrap();
+    repository::get_stored_stocks(&connection);
+}
+
+fn process_help(tx: Sender<Vec<u8>>, id: u32) {
+    let response = format!("Available commands:{}, {}, {}",
+        Operation::ListAvailable.to_string(), 
+        Operation::ListStored.to_string(),
+        Operation::Help.to_string());
+
+    let job_response = Job {
+        id,
+        payload: response.into()
+    };
+    println!("[MAIN] Sending {:?}", job_response);
+
+    let bytes = job_response.to_bytes();
+    tx.send(bytes);
+    // TODO: Send response to the connection
 }
 
 #[test]
