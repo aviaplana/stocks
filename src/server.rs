@@ -10,12 +10,12 @@ use crossbeam_channel::{
     Sender,
     Receiver, 
 };
-use crate::{Job, Operation, ToBytes};
+use crate::{Job, Operation, ByteOperations};
 use tokio;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseWrapper<'a> {
     pub response: &'a str
 }
@@ -97,20 +97,20 @@ fn send_job(connection_id: u32,
 
 fn wait_and_process_response(connection_id: u32, rx: &Receiver<Vec<u8>>, mut stream: &TcpStream) {
     loop {
-        let response = rx.recv().unwrap();
-        debug!(target: "Server", "Raw response: {:?}", response);
+        let serialized_job = rx.recv().unwrap();
+        debug!(target: "Server", "Raw response: {:?}", serialized_job);
 
-        let resp_job= Job::from(&response);
-        if resp_job.id == connection_id {
+        let job= Job::from(&serialized_job);
+
+        if job.id == connection_id {
+            let mut payload = job.payload.clone();
+            payload.push(b'\n');
+            let sliced_payload = payload.as_slice();
             
-            let mut payload_with_nl = resp_job.payload.clone();
-            payload_with_nl.extend('\n'.to_bytes());
-            let payload_arr = payload_with_nl.as_slice();
-
-            let to_str = str::from_utf8(payload_arr).unwrap().to_string();
+            let to_str = str::from_utf8(sliced_payload).unwrap().to_string();
             info!(target: "Server", "Response: {}", to_str);
             
-            stream.write(payload_arr).unwrap();
+            stream.write(sliced_payload).unwrap();
             break;
         } 
     }
