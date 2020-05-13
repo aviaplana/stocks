@@ -41,13 +41,13 @@ impl<T> ToBytes for T where
 impl ToString for Operation {
     fn to_string(&self) -> String {
         match self {
-            ListStored => "list_stored".into(),
-            ListAvailable => "list_available".into(),
-            UpdatePrices => "update_prices".into(),
-            AddStock => "add_stock".into(),
-            DeleteStock => "delete_stock".into(),
-            Help => "help".into(),
-            Error => "error".into(),
+            Self::ListStored => "list_stored".into(),
+            Self::ListAvailable => "list_available".into(),
+            Self::UpdatePrices => "update_prices".into(),
+            Self::AddStock(_) => "add_stock".into(),
+            Self::DeleteStock(_) => "delete_stock".into(),
+            Self::Help => "help".into(),
+            Self::Error => "error".into(),
         }
     }
 }
@@ -179,7 +179,7 @@ fn process_help(tx: Sender<Vec<u8>>, id: u32) {
         Operation::ListAvailable.to_string(), 
         Operation::ListStored.to_string(),
         Operation::Help.to_string());
-
+        
     send_response(&tx, id, response.as_str());
 }
 
@@ -187,13 +187,13 @@ fn send_response(tx: &Sender<Vec<u8>>, id: u32, response: &str) {
     let response = ResponseWrapper{ response };
     let response_serialized = serde_json::to_string(&response).unwrap();
     
+    info!(target: "Main", "Sending to connection {}: {}", id, &response_serialized);
+    
     let job_response = Job {
         id,
-        payload: response_serialized.to_bytes()
+        payload: response_serialized.into_bytes()
     };
     
-    info!(target: "Main", "Sending to connection {}: {:?}", id, job_response);
-
     let bytes = job_response.to_bytes();
     tx.send(bytes).unwrap();
 }

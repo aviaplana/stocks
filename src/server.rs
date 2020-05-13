@@ -102,9 +102,14 @@ fn wait_and_process_response(connection_id: u32, rx: &Receiver<Vec<u8>>, mut str
 
         let resp_job= Job::from(&response);
         if resp_job.id == connection_id {
-            let payload_arr = resp_job.payload.as_slice();
-            let to_str = str::from_utf8(payload_arr).unwrap();
+            
+            let mut payload_with_nl = resp_job.payload.clone();
+            payload_with_nl.extend('\n'.to_bytes());
+            let payload_arr = payload_with_nl.as_slice();
+
+            let to_str = str::from_utf8(payload_arr).unwrap().to_string();
             info!(target: "Server", "Response: {}", to_str);
+            
             stream.write(payload_arr).unwrap();
             break;
         } 
