@@ -41,7 +41,7 @@ pub async fn get_current_price(client: &HttpClient, symbol: &str) ->Result<f32, 
 }
 
 // Returns a list of all the available stocks in the API
-pub async fn get_available_stocks(client: &HttpClient, ) -> Result<Vec<Stock>, Box<dyn std::error::Error+Sync+Send>>{
+pub async fn get_available_stocks(client: &HttpClient) -> Result<Vec<Stock>, Box<dyn std::error::Error+Sync+Send>>{
     match stock::stock_api::get_stock_list(client).await {
         Ok(stocks) => {
             Ok(stocks

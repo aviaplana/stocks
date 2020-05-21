@@ -22,7 +22,6 @@ impl Endpoint {
         };
 
         let base = String::from(Self::BASE_URL);
-
         format!("{}{}", base, route).parse().unwrap()
     }
 }
